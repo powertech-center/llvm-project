@@ -13,21 +13,43 @@
 #include "llvm/Support/Error.h"
 
 #include "JSONUtils.h"
+#include "Pipe.h"
 
 #include <chrono>
+#include <memory>
 
 namespace lldb_vscode {
 
 /// Struct that controls the life of a fifo file in the filesystem.
 ///
 /// The file is destroyed when the destructor is invoked.
-struct FifoFile {
-  FifoFile(llvm::StringRef path);
 
+class FifoFileIO;
+struct FifoFile;
+
+using FifoFileIOSP = std::shared_ptr<FifoFileIO>;
+using FifoFileSP = std::shared_ptr<FifoFile>;
+
+struct FifoFile {
+  FifoFile(llvm::StringRef other_endpoint_name);
   ~FifoFile();
 
-  std::string m_path;
+  std::string GetPath() const;
+
+private:
+  llvm::Expected<std::string> ReadLine() const;
+  void WriteLine(std::string const &line);
+  lldb_private::Status Create(llvm::StringRef path);
+  lldb_private::Status Open(llvm::StringRef path);
+  
+  friend llvm::Expected<FifoFileSP> CreateFifoFile(llvm::StringRef path, llvm::StringRef other_endpoint_name);
+  friend llvm::Expected<FifoFileSP> OpenFifoFile(llvm::StringRef path, llvm::StringRef other_endpoint_name);
+  friend class FifoFileIO;
+
+  PipeUP m_pipe;
+  std::string m_other_endpoint_name;
 };
+
 
 /// Create a fifo file in the filesystem.
 ///
@@ -37,7 +59,8 @@ struct FifoFile {
 /// \return
 ///     A \a std::shared_ptr<FifoFile> if the file could be created, or an
 ///     \a llvm::Error in case of failures.
-llvm::Expected<std::shared_ptr<FifoFile>> CreateFifoFile(llvm::StringRef path);
+llvm::Expected<FifoFileSP> CreateFifoFile(llvm::StringRef path, llvm::StringRef other_endpoint_name);
+llvm::Expected<FifoFileSP> OpenFifoFile(llvm::StringRef path, llvm::StringRef other_endpoint_name);
 
 class FifoFileIO {
 public:
@@ -47,7 +70,7 @@ public:
   /// \param[in] other_endpoint_name
   ///     A human readable name for the other endpoint that will communicate
   ///     using this file. This is used for error messages.
-  FifoFileIO(llvm::StringRef fifo_file, llvm::StringRef other_endpoint_name);
+  FifoFileIO(FifoFileSP io, llvm::StringRef other_endpoint_name);
 
   /// Read the next JSON object from the underlying input fifo file.
   ///
@@ -78,7 +101,7 @@ public:
       std::chrono::milliseconds timeout = std::chrono::milliseconds(20000));
 
 private:
-  std::string m_fifo_file;
+  FifoFileSP m_io;
   std::string m_other_endpoint_name;
 };
 

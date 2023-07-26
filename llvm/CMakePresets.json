@@ -1,0 +1,104 @@
+{
+    "version": 4,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 24,
+        "patch": 0
+    },
+    "vendor": {
+        
+    },
+    "configurePresets": [
+        {
+            "name": "llvm-base",
+            "binaryDir": "${sourceDir}/llvm-out",
+            "description": "Base preset for configure llvm",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "clang",
+                "CMAKE_CXX_COMPILER": "clang++",
+                "LLDB_ENABLE_LIBEDIT": "OFF",
+                "LLDB_ENABLE_CURSES": "OFF",
+                "LLDB_ENABLE_LZMA": "OFF",
+                "LLDB_ENABLE_LIBXML2": "OFF",
+                "LLDB_ENABLE_PYTHON": "OFF",
+                "LLDB_ENABLE_LUA": "OFF",
+                "LLVM_ENABLE_PROJECTS": "clang;lldb",
+                "LLVM_APPEND_VC_REV": "OFF",
+		"LLVM_HOST_TRIPLE": "x86_64",
+                "LLVM_INCLUDE_BENCHMARKS": "OFF",
+                "LLVM_INCLUDE_EXAMPLES": "OFF",
+                "LLVM_INCLUDE_TESTS": "OFF",
+                "LLVM_INCLUDE_DOCS": "OFF",
+                "LLVM_TARGETS_TO_BUILD": "X86",
+                "LLVM_ENABLE_IDE": "ON",
+                "CLANG_INCLUDE_TESTS": "OFF",
+                "LLDB_USE_SYSTEM_DEBUGSERVER": "ON"
+            }
+        },
+        {
+            "name": "windows-cl-base",
+            "description": "Windows base preset for configure llvm to build with CL compiler",
+            "inherits": "llvm-base",
+            "generator": "Visual Studio 17 2022",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "windows-clang-base",
+            "description": "Windows base preset for configure llvm to build with Clang compiler",
+            "inherits": "llvm-base",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_C_FLAGS": "-femulated-tls",
+                "CMAKE_CXX_FLAGS": "-femulated-tls",
+                "CMAKE_EXE_LINKER_FLAGS": "$env{WINDOWS_LINKER_FLAGS}",
+                "CMAKE_SHARED_LINKER_FLAGS": "$env{WINDOWS_LINKER_FLAGS}",
+                "CMAKE_MODULE_LINKER_FLAGS": "$env{WINDOWS_LINKER_FLAGS}"
+            },
+            "environment": {
+                "WINDOWS_LINKER_FLAGS": "-fuse-ld=lld -static -lpthread"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            }
+        },
+        {
+            "name": "linux-base",
+            "description": "Linux base preset for configure llvm",
+            "generator": "Unix Makefiles",
+            "inherits": "llvm-base",
+            "cacheVariables": {
+                "CMAKE_EXE_LINKER_FLAGS": "$env{LINUX_LINKER_FLAGS}",
+                "CMAKE_MODULE_LINKER_FLAGS": "$env{LINUX_LINKER_FLAGS}",
+                "CMAKE_SHARED_LINKER_FLAGS": "$env{LINUX_LINKER_FLAGS}"
+            },
+            "environment": {
+                "LINUX_LINKER_FLAGS": "-fuse-ld=lld"
+            },
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            }
+        },
+        {
+            "name": "x64-win-cl-debug",
+            "inherits": "windows-cl-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "x64-win-cl-release",
+            "inherits": "windows-cl-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
+        }
+    ]
+}

@@ -1612,20 +1612,19 @@ llvm::Error request_runInTerminal(const llvm::json::Object &launch_request,
   g_vsc.is_attach = true;
   lldb::SBAttachInfo attach_info;
 
-  llvm::Expected<std::shared_ptr<FifoFile>> comm_file_or_err =
-      CreateRunInTerminalCommFile();
-  if (!comm_file_or_err)
-    return comm_file_or_err.takeError();
-  FifoFile &comm_file = *comm_file_or_err.get();
+  auto fifo_file_or_err = CreateFifoFile("lldb-vscode-runinterminal-comm", "debug-adaptor");
+  if (!fifo_file_or_err)
+    return fifo_file_or_err.takeError();
+  auto fifo_file = fifo_file_or_err.get();
+  auto io = std::make_shared<FifoFileIO>(fifo_file, "debug-adaptor");
 
-  RunInTerminalDebugAdapterCommChannel comm_channel(comm_file.m_path);
-
+  RunInTerminalDebugAdapterCommChannel comm_channel(io);
   lldb::pid_t debugger_pid = LLDB_INVALID_PROCESS_ID;
 #if !defined(_WIN32)
   debugger_pid = getpid();
 #endif
   llvm::json::Object reverse_request = CreateRunInTerminalReverseRequest(
-      launch_request, g_vsc.debug_adaptor_path, comm_file.m_path, debugger_pid);
+      launch_request, g_vsc.debug_adaptor_path, fifo_file->GetPath(), debugger_pid);
   g_vsc.SendReverseRequest("runInTerminal", std::move(reverse_request),
                            [](llvm::Expected<llvm::json::Value> value) {
                              if (!value) {
@@ -3340,10 +3339,6 @@ EXAMPLES:
 void LaunchRunInTerminalTarget(llvm::opt::Arg &target_arg,
                                llvm::StringRef comm_file,
                                lldb::pid_t debugger_pid, char *argv[]) {
-#if defined(_WIN32)
-  llvm::errs() << "runInTerminal is only supported on POSIX systems\n";
-  exit(EXIT_FAILURE);
-#else
 
   // On Linux with the Yama security module enabled, a process can only attach
   // to its descendants by default. In the runInTerminal case the target
@@ -3353,7 +3348,16 @@ void LaunchRunInTerminalTarget(llvm::opt::Arg &target_arg,
     (void)prctl(PR_SET_PTRACER, debugger_pid, 0, 0, 0);
 #endif
 
-  RunInTerminalLauncherCommChannel comm_channel(comm_file);
+  auto fifo_file_or_err = OpenFifoFile(comm_file, "run-in-terminal launcher");
+  if (!fifo_file_or_err) {
+    llvm::errs() << fifo_file_or_err.takeError();
+    exit(EXIT_FAILURE);
+  }
+  auto fifo_file = fifo_file_or_err.get();
+  auto io = std::make_shared<FifoFileIO>(fifo_file, "run-in-terminal launcher");
+
+  RunInTerminalLauncherCommChannel comm_channel(io);
+
   if (llvm::Error err = comm_channel.NotifyPid()) {
     llvm::errs() << llvm::toString(std::move(err)) << "\n";
     exit(EXIT_FAILURE);
@@ -3379,7 +3383,6 @@ void LaunchRunInTerminalTarget(llvm::opt::Arg &target_arg,
   comm_channel.NotifyError(error);
   llvm::errs() << error << "\n";
   exit(EXIT_FAILURE);
-#endif
 }
 
 /// used only by TestVSCode_redirection_to_console.py

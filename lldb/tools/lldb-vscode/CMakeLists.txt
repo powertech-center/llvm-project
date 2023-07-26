@@ -2,6 +2,16 @@ if ( CMAKE_SYSTEM_NAME MATCHES "Windows" OR CMAKE_SYSTEM_NAME MATCHES "NetBSD" )
   list(APPEND extra_libs lldbHost)
 endif ()
 
+if (CMAKE_SYSTEM_NAME MATCHES "Windows")
+  add_host_subdirectory(windows/
+    windows/PipeWSC.cpp
+  )
+else()
+  add_host_subdirectory(posix/
+    posix/PipePSC.cpp
+  )
+endif()
+
 if (HAVE_LIBPTHREAD)
   list(APPEND extra_libs pthread)
 endif ()
@@ -36,6 +46,7 @@ add_lldb_tool(lldb-vscode
   RunInTerminal.cpp
   SourceBreakpoint.cpp
   VSCode.cpp
+  ${HOST_SOURCES}
 
   LINK_LIBS
     liblldb

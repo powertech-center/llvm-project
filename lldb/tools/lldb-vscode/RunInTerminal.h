@@ -68,7 +68,7 @@ struct RunInTerminalMessageDidAttach : RunInTerminalMessage {
 
 class RunInTerminalLauncherCommChannel {
 public:
-  RunInTerminalLauncherCommChannel(llvm::StringRef comm_file);
+  RunInTerminalLauncherCommChannel(FifoFileIOSP io);
 
   /// Wait until the debug adaptor attaches.
   ///
@@ -91,12 +91,12 @@ public:
   void NotifyError(llvm::StringRef error);
 
 private:
-  FifoFileIO m_io;
+  FifoFileIOSP m_io;
 };
 
 class RunInTerminalDebugAdapterCommChannel {
 public:
-  RunInTerminalDebugAdapterCommChannel(llvm::StringRef comm_file);
+  RunInTerminalDebugAdapterCommChannel(FifoFileIOSP io);
 
   /// Notify the runInTerminal launcher that it was attached.
   ///
@@ -117,12 +117,12 @@ public:
   std::string GetLauncherError();
 
 private:
-  FifoFileIO m_io;
+  FifoFileIOSP m_io;
 };
 
 /// Create a fifo file used to communicate the debug adaptor with
 /// the runInTerminal launcher.
-llvm::Expected<std::shared_ptr<FifoFile>> CreateRunInTerminalCommFile();
+//llvm::Expected<std::shared_ptr<FifoFile>> CreateRunInTerminalCommFile();
 
 } // namespace lldb_vscode
 

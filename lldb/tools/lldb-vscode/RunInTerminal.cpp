@@ -99,13 +99,13 @@ static Error ToError(const RunInTerminalMessage &message) {
 }
 
 RunInTerminalLauncherCommChannel::RunInTerminalLauncherCommChannel(
-    StringRef comm_file)
-    : m_io(comm_file, "debug adaptor") {}
+    FifoFileIOSP io)
+    : m_io(io) {}
 
 Error RunInTerminalLauncherCommChannel::WaitUntilDebugAdaptorAttaches(
     std::chrono::milliseconds timeout) {
   if (Expected<RunInTerminalMessageUP> message =
-          GetNextMessage(m_io, timeout)) {
+          GetNextMessage(*m_io, timeout)) {
     if (message.get()->kind == eRunInTerminalMessageKindDidAttach)
       return Error::success();
     else
@@ -115,18 +115,18 @@ Error RunInTerminalLauncherCommChannel::WaitUntilDebugAdaptorAttaches(
 }
 
 Error RunInTerminalLauncherCommChannel::NotifyPid() {
-  return m_io.SendJSON(RunInTerminalMessagePid(getpid()).ToJSON());
+  return m_io->SendJSON(RunInTerminalMessagePid(getpid()).ToJSON());
 }
 
 void RunInTerminalLauncherCommChannel::NotifyError(StringRef error) {
-  if (Error err = m_io.SendJSON(RunInTerminalMessageError(error).ToJSON(),
+  if (Error err = m_io->SendJSON(RunInTerminalMessageError(error).ToJSON(),
                                 std::chrono::seconds(2)))
     llvm::errs() << llvm::toString(std::move(err)) << "\n";
 }
 
 RunInTerminalDebugAdapterCommChannel::RunInTerminalDebugAdapterCommChannel(
-    StringRef comm_file)
-    : m_io(comm_file, "runInTerminal launcher") {}
+    FifoFileIOSP io)
+    : m_io(io) {}
 
 // Can't use \a std::future<llvm::Error> because it doesn't compile on Windows
 std::future<lldb::SBError>
@@ -134,7 +134,7 @@ RunInTerminalDebugAdapterCommChannel::NotifyDidAttach() {
   return std::async(std::launch::async, [&]() {
     lldb::SBError error;
     if (llvm::Error err =
-            m_io.SendJSON(RunInTerminalMessageDidAttach().ToJSON()))
+            m_io->SendJSON(RunInTerminalMessageDidAttach().ToJSON()))
       error.SetErrorString(llvm::toString(std::move(err)).c_str());
     return error;
   });
@@ -142,7 +142,7 @@ RunInTerminalDebugAdapterCommChannel::NotifyDidAttach() {
 
 Expected<lldb::pid_t> RunInTerminalDebugAdapterCommChannel::GetLauncherPid() {
   if (Expected<RunInTerminalMessageUP> message =
-          GetNextMessage(m_io, std::chrono::seconds(20))) {
+          GetNextMessage(*m_io, std::chrono::seconds(20))) {
     if (message.get()->kind == eRunInTerminalMessageKindPID)
       return message.get()->GetAsPidMessage()->pid;
     return ToError(*message.get());
@@ -154,13 +154,13 @@ Expected<lldb::pid_t> RunInTerminalDebugAdapterCommChannel::GetLauncherPid() {
 std::string RunInTerminalDebugAdapterCommChannel::GetLauncherError() {
   // We know there's been an error, so a small timeout is enough.
   if (Expected<RunInTerminalMessageUP> message =
-          GetNextMessage(m_io, std::chrono::seconds(1)))
+          GetNextMessage(*m_io, std::chrono::seconds(1)))
     return toString(ToError(*message.get()));
   else
     return toString(message.takeError());
 }
 
-Expected<std::shared_ptr<FifoFile>> CreateRunInTerminalCommFile() {
+/*Expected<std::shared_ptr<FifoFile>> CreateRunInTerminalCommFile() {
   SmallString<256> comm_file;
   if (std::error_code EC = sys::fs::getPotentiallyUniqueTempFileName(
           "lldb-vscode-run-in-terminal-comm", "", comm_file))
@@ -168,6 +168,6 @@ Expected<std::shared_ptr<FifoFile>> CreateRunInTerminalCommFile() {
                                  "runInTerminal communication files");
 
   return CreateFifoFile(comm_file.str());
-}
+}*/
 
 } // namespace lldb_vscode
