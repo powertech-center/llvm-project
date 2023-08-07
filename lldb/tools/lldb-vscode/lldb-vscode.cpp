@@ -1721,18 +1721,18 @@ lldb::SBError LaunchProcess(const llvm::json::Object &request) {
   launch_info.SetDetachOnError(detachOnError);
   launch_info.SetLaunchFlags(flags | lldb::eLaunchFlagDebug |
                              lldb::eLaunchFlagStopAtEntry);
-  const uint64_t timeout_seconds = GetUnsigned(arguments, "timeout", 30);
+ // const uint64_t timeout_seconds = GetUnsigned(arguments, "timeout", 30);
 
-  if (GetBoolean(arguments, "runInTerminal", false)) {
+  /*if (GetBoolean(arguments, "runInTerminal", false)) {
     if (llvm::Error err = request_runInTerminal(request, timeout_seconds))
       error.SetErrorString(llvm::toString(std::move(err)).c_str());
-  } else if (launchCommands.empty()) {
+  } else if (launchCommands.empty()) {*/
     // Disable async events so the launch will be successful when we return from
     // the launch call and the launch will happen synchronously
     g_vsc.debugger.SetAsync(false);
     g_vsc.target.Launch(launch_info, error);
     g_vsc.debugger.SetAsync(true);
-  } else {
+  /*} else {
     // Set the launch info so that run commands can access the configured
     // launch details.
     g_vsc.target.SetLaunchInfo(launch_info);
@@ -1744,7 +1744,7 @@ lldb::SBError LaunchProcess(const llvm::json::Object &request) {
     // proceeding as the the launch commands are not run using the synchronous
     // mode.
     error = g_vsc.WaitForProcessToStop(timeout_seconds);
-  }
+  }*/
   return error;
 }
 
@@ -3501,6 +3501,7 @@ int main(int argc, char *argv[]) {
 
   RegisterRequestCallbacks();
 
+
 /*  int portno = -1;
 
   if (auto *arg = input_args.getLastArg(OPT_port)) {
@@ -3534,6 +3535,11 @@ int main(int argc, char *argv[]) {
     g_vsc.input.descriptor = StreamDescriptor::from_file(fileno(stdin), false);
     g_vsc.output.descriptor = StreamDescriptor::from_file(new_stdout_fd, false);
   }
+
+  /*g_vsc.SendOutput(OutputType::Stdout, "Тест вывода Debug Console");
+  g_vsc.SendOutput(OutputType::Stderr, "Test Debug Console Error output");*/
+  //printf("Test printf\n");
+  //*g_vsc.log << "Test g_vsc.log" << "\n";
 
   bool CleanExit = true;
   if (auto Err = g_vsc.Loop()) {
