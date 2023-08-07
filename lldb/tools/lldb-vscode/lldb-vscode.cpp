@@ -3298,7 +3298,7 @@ void RegisterRequestCallbacks() {
 
 } // anonymous namespace
 
-static void printHelp(LLDBVSCodeOptTable &table, llvm::StringRef tool_name) {
+/*static void printHelp(LLDBVSCodeOptTable &table, llvm::StringRef tool_name) {
   std::string usage_str = tool_name.str() + " options";
   table.printHelp(llvm::outs(), usage_str.c_str(), "LLDB VSCode", false);
 
@@ -3318,7 +3318,7 @@ EXAMPLES:
     lldb-vscode -g
   )___";
   llvm::outs() << examples;
-}
+}*/
 
 // If --launch-target is provided, this instance of lldb-vscode becomes a
 // runInTerminal launcher. It will ultimately launch the program specified in
@@ -3440,7 +3440,7 @@ int main(int argc, char *argv[]) {
   llvm::ArrayRef<const char *> ArgsArr = llvm::ArrayRef(argv + 1, argc);
   llvm::opt::InputArgList input_args = T.ParseArgs(ArgsArr, MAI, MAC);
 
-  if (input_args.hasArg(OPT_help)) {
+  /*if (input_args.hasArg(OPT_help)) {
     printHelp(T, llvm::sys::path::filename(argv[0]));
     return EXIT_SUCCESS;
   }
@@ -3460,7 +3460,7 @@ int main(int argc, char *argv[]) {
           << "' is not a valid option, use 'variable', 'command' or 'auto'.\n";
       return EXIT_FAILURE;
     }
-  }
+  }*/
 
   if (llvm::opt::Arg *target_arg = input_args.getLastArg(OPT_launch_target)) {
     if (llvm::opt::Arg *comm_file = input_args.getLastArg(OPT_comm_file)) {
