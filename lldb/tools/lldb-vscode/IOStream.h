@@ -17,7 +17,9 @@
 // We also need to #undef GetObject (which is defined to GetObjectW) because
 // the JSON code we use also has methods named `GetObject()` and we conflict
 // against these.
+#if !defined(NOMINMAX)
 #define NOMINMAX
+#endif
 #include <windows.h>
 #else
 typedef int SOCKET;

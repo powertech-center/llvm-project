@@ -22,7 +22,9 @@
 // We also need to #undef GetObject (which is defined to GetObjectW) because
 // the JSON code we use also has methods named `GetObject()` and we conflict
 // against these.
+#if !defined(NOMINMAX)
 #define NOMINMAX
+#endif
 #include <windows.h>
 #undef GetObject
 #include <io.h>
@@ -122,7 +124,7 @@ lldb::SBValueList *GetTopLevelScope(int64_t variablesReference) {
   }
 }
 
-SOCKET AcceptConnection(int portno) {
+/*SOCKET AcceptConnection(int portno) {
   // Accept a socket connection from any host on "portno".
   SOCKET newsockfd = -1;
   struct sockaddr_in serv_addr, cli_addr;
@@ -159,7 +161,7 @@ SOCKET AcceptConnection(int portno) {
 #endif
   }
   return newsockfd;
-}
+}*/
 
 std::vector<const char *> MakeArgv(const llvm::ArrayRef<std::string> &strs) {
   // Create and return an array of "const char *", one for each C string in
@@ -3499,7 +3501,7 @@ int main(int argc, char *argv[]) {
 
   RegisterRequestCallbacks();
 
-  int portno = -1;
+/*  int portno = -1;
 
   if (auto *arg = input_args.getLastArg(OPT_port)) {
     auto optarg = arg->getValue();
@@ -3509,15 +3511,17 @@ int main(int argc, char *argv[]) {
       fprintf(stderr, "'%s' is not a valid port number.\n", optarg);
       return EXIT_FAILURE;
     }
-  }
+  }*/
 
-#if !defined(_WIN32)
+/*#if !defined(_WIN32)
   if (input_args.hasArg(OPT_wait_for_debugger)) {
     printf("Paused waiting for debugger to attach (pid = %i)...\n", getpid());
     pause();
   }
 #endif
-  if (portno != -1) {
+*/
+
+/*  if (portno != -1) {
     printf("Listening on port %i...\n", portno);
     SOCKET socket_fd = AcceptConnection(portno);
     if (socket_fd >= 0) {
@@ -3526,7 +3530,7 @@ int main(int argc, char *argv[]) {
     } else {
       return EXIT_FAILURE;
     }
-  } else {
+  } else*/ {
     g_vsc.input.descriptor = StreamDescriptor::from_file(fileno(stdin), false);
     g_vsc.output.descriptor = StreamDescriptor::from_file(new_stdout_fd, false);
   }

@@ -18,7 +18,9 @@
 #include "llvm/Support/FormatVariadic.h"
 
 #if defined(_WIN32)
+#if !defined(NOMINMAX)
 #define NOMINMAX
+#endif
 #include <fcntl.h>
 #include <io.h>
 #include <windows.h>
