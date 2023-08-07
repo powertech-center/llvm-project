@@ -3435,10 +3435,10 @@ int main(int argc, char *argv[]) {
   llvm::sys::fs::make_absolute(program_path);
   g_vsc.debug_adaptor_path = program_path.str().str();
 
-  LLDBVSCodeOptTable T;
+ /* LLDBVSCodeOptTable T;
   unsigned MAI, MAC;
   llvm::ArrayRef<const char *> ArgsArr = llvm::ArrayRef(argv + 1, argc);
-  llvm::opt::InputArgList input_args = T.ParseArgs(ArgsArr, MAI, MAC);
+  llvm::opt::InputArgList input_args = T.ParseArgs(ArgsArr, MAI, MAC); */
 
   /*if (input_args.hasArg(OPT_help)) {
     printHelp(T, llvm::sys::path::filename(argv[0]));
@@ -3462,7 +3462,7 @@ int main(int argc, char *argv[]) {
     }
   }*/
 
-  if (llvm::opt::Arg *target_arg = input_args.getLastArg(OPT_launch_target)) {
+  /*if (llvm::opt::Arg *target_arg = input_args.getLastArg(OPT_launch_target)) {
     if (llvm::opt::Arg *comm_file = input_args.getLastArg(OPT_comm_file)) {
       lldb::pid_t pid = LLDB_INVALID_PROCESS_ID;
       llvm::opt::Arg *debugger_pid = input_args.getLastArg(OPT_debugger_pid);
@@ -3487,7 +3487,7 @@ int main(int argc, char *argv[]) {
                       "specified\n";
       return EXIT_FAILURE;
     }
-  }
+  }*/
 
   // stdout/stderr redirection to the IDE's console
   int new_stdout_fd = SetupStdoutStderrRedirection();
