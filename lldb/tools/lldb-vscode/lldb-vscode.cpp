@@ -1609,7 +1609,7 @@ void request_initialize(const llvm::json::Object &request) {
   g_vsc.SendJSON(llvm::json::Value(std::move(response)));
 }
 
-llvm::Error request_runInTerminal(const llvm::json::Object &launch_request,
+/*llvm::Error request_runInTerminal(const llvm::json::Object &launch_request,
                                   const uint64_t timeout_seconds) {
   g_vsc.is_attach = true;
   lldb::SBAttachInfo attach_info;
@@ -1678,7 +1678,7 @@ llvm::Error request_runInTerminal(const llvm::json::Object &launch_request,
     return llvm::Error::success();
   return llvm::createStringError(llvm::inconvertibleErrorCode(),
                                  error.GetCString());
-}
+}*/
 
 // Takes a LaunchRequest object and launches the process, also handling
 // runInTerminal if applicable. It doesn't do any of the additional
@@ -1727,11 +1727,33 @@ lldb::SBError LaunchProcess(const llvm::json::Object &request) {
     if (llvm::Error err = request_runInTerminal(request, timeout_seconds))
       error.SetErrorString(llvm::toString(std::move(err)).c_str());
   } else if (launchCommands.empty()) {*/
+
+    g_vsc.SendOutput(OutputType::Stdout, "Перед захватом терминала\n");
+
+    llvm::json::Object reverse_request = CreateRunInTerminalReverseRequest(
+      request/*, g_vsc.debug_adaptor_path, comm_file.m_path, debugger_pid*/);
+    g_vsc.SendReverseRequest("runInTerminal", std::move(reverse_request),
+      [](llvm::Expected<llvm::json::Value> value) {
+        g_vsc.SendOutput(OutputType::Stdout, "Внутри захвата терминала\n");
+        if (!value) {
+          llvm::Error err = value.takeError();
+          llvm::errs()
+              << "runInTerminal request failed: "
+              << llvm::toString(std::move(err)) << "\n";
+        }
+      });
+
+
+    g_vsc.SendOutput(OutputType::Stdout, "После захвата терминала\n");
+
     // Disable async events so the launch will be successful when we return from
     // the launch call and the launch will happen synchronously
     g_vsc.debugger.SetAsync(false);
     g_vsc.target.Launch(launch_info, error);
     g_vsc.debugger.SetAsync(true);
+
+    g_vsc.SendOutput(OutputType::Stdout, "После лаунча\n");
+
   /*} else {
     // Set the launch info so that run commands can access the configured
     // launch details.
