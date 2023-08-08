@@ -1684,13 +1684,15 @@ void request_initialize(const llvm::json::Object &request) {
 // runInTerminal if applicable. It doesn't do any of the additional
 // initialization and bookkeeping stuff that is needed for `request_launch`.
 // This way we can reuse the process launching logic for RestartRequest too.
+lldb::SBLaunchInfo launch_info(nullptr);
+
 lldb::SBError LaunchProcess(const llvm::json::Object &request) {
   lldb::SBError error;
   auto arguments = request.getObject("arguments");
   auto launchCommands = GetStrings(arguments, "launchCommands");
 
   // Instantiate a launch info instance for the target.
-  auto launch_info = g_vsc.target.GetLaunchInfo();
+  launch_info = g_vsc.target.GetLaunchInfo();
 
   // Grab the current working directory if there is one and set it in the
   // launch info.
@@ -1728,7 +1730,7 @@ lldb::SBError LaunchProcess(const llvm::json::Object &request) {
       error.SetErrorString(llvm::toString(std::move(err)).c_str());
   } else if (launchCommands.empty()) {*/
 
-    g_vsc.SendOutput(OutputType::Stdout, "Перед захватом терминала\n");
+  //  g_vsc.SendOutput(OutputType::Stdout, "Перед захватом терминала\n");
 
     llvm::json::Object reverse_request = CreateRunInTerminalReverseRequest(
       request/*, g_vsc.debug_adaptor_path, comm_file.m_path, debugger_pid*/);
@@ -1740,19 +1742,22 @@ lldb::SBError LaunchProcess(const llvm::json::Object &request) {
           llvm::errs()
               << "runInTerminal request failed: "
               << llvm::toString(std::move(err)) << "\n";
+        } else {
+          g_vsc.debugger.SetAsync(false);
+          lldb::SBError error;
+          g_vsc.target.Launch(launch_info, error);
+          g_vsc.debugger.SetAsync(true);
+          g_vsc.SendOutput(OutputType::Stdout, "После лаунча\n");
         }
       });
 
 
-    g_vsc.SendOutput(OutputType::Stdout, "После захвата терминала\n");
+   // g_vsc.SendOutput(OutputType::Stdout, "После захвата терминала\n");
 
     // Disable async events so the launch will be successful when we return from
     // the launch call and the launch will happen synchronously
-    g_vsc.debugger.SetAsync(false);
-    g_vsc.target.Launch(launch_info, error);
-    g_vsc.debugger.SetAsync(true);
 
-    g_vsc.SendOutput(OutputType::Stdout, "После лаунча\n");
+
 
   /*} else {
     // Set the launch info so that run commands can access the configured
