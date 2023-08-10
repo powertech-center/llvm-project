@@ -599,27 +599,44 @@ bool VSCode::HandleObject(const llvm::json::Object &object) {
   return false;
 }
 
-llvm::Error VSCode::Loop() {
-  while (!sent_terminated_event) {
+bool VSCode::HandleNextObject(llvm::Error& error) {
+  if (!sent_terminated_event) {
     llvm::json::Object object;
     lldb_vscode::PacketStatus status = GetNextObject(object);
 
-    if (status == lldb_vscode::PacketStatus::EndOfFile) {
-      break;
-    }
+    if (status != lldb_vscode::PacketStatus::EndOfFile) {
+      if (status != lldb_vscode::PacketStatus::Success) {
+        error = llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                        "failed to send packet");
+        return false;
+      }
 
-    if (status != lldb_vscode::PacketStatus::Success) {
-      return llvm::createStringError(llvm::inconvertibleErrorCode(),
-                                     "failed to send packet");
-    }
+      if (!HandleObject(object)) {
+        error = llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                        "unhandled packet");
+        return false;
+      }
 
-    if (!HandleObject(object)) {
-      return llvm::createStringError(llvm::inconvertibleErrorCode(),
-                                     "unhandled packet");
+      return true;
     }
   }
 
-  return llvm::Error::success();
+  error = llvm::Error::success();
+  return false;
+}
+
+llvm::Error VSCode::HandleNextObject() {
+  llvm::Error error = llvm::Error::success();
+  HandleNextObject(error);
+  return error;
+}
+
+llvm::Error VSCode::Loop() {
+  llvm::Error error = llvm::Error::success();
+
+  while (HandleNextObject(error)) {}
+
+  return error;
 }
 
 void VSCode::SendReverseRequest(llvm::StringRef command,

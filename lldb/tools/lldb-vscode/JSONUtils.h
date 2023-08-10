@@ -496,7 +496,7 @@ llvm::json::Value CreateCompileUnit(lldb::SBCompileUnit unit);
 ///     A "runInTerminal" JSON object that follows the specification outlined by
 ///     Microsoft.
 llvm::json::Object
-CreateRunInTerminalReverseRequest(const llvm::json::Object &launch_request/*,
+CreateRunInTerminalReverseRequest(/*const llvm::json::Object &launch_request,
                                   llvm::StringRef debug_adaptor_path,
                                   llvm::StringRef comm_file,
                                   lldb::pid_t debugger_pid*/);

@@ -1733,7 +1733,7 @@ lldb::SBError LaunchProcess(const llvm::json::Object &request) {
   //  g_vsc.SendOutput(OutputType::Stdout, "Перед захватом терминала\n");
 
     llvm::json::Object reverse_request = CreateRunInTerminalReverseRequest(
-      request/*, g_vsc.debug_adaptor_path, comm_file.m_path, debugger_pid*/);
+      /*request, g_vsc.debug_adaptor_path, comm_file.m_path, debugger_pid*/);
     g_vsc.SendReverseRequest("runInTerminal", std::move(reverse_request),
       [](llvm::Expected<llvm::json::Value> value) {
         g_vsc.SendOutput(OutputType::Stdout, "Внутри захвата терминала\n");
@@ -1742,14 +1742,17 @@ lldb::SBError LaunchProcess(const llvm::json::Object &request) {
           llvm::errs()
               << "runInTerminal request failed: "
               << llvm::toString(std::move(err)) << "\n";
-        } else {
+        } {
+          g_vsc.SendOutput(OutputType::Stdout, "Терминал создан\n");
+        }
+      });
+      auto handle_error = g_vsc.HandleNextObject();
+
+          g_vsc.SendOutput(OutputType::Stdout, "Перед лаунчем\n");
           g_vsc.debugger.SetAsync(false);
-          lldb::SBError error;
           g_vsc.target.Launch(launch_info, error);
           g_vsc.debugger.SetAsync(true);
           g_vsc.SendOutput(OutputType::Stdout, "После лаунча\n");
-        }
-      });
 
 
    // g_vsc.SendOutput(OutputType::Stdout, "После захвата терминала\n");

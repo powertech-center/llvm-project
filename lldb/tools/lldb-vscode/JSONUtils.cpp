@@ -1115,7 +1115,7 @@ llvm::json::Value CreateCompileUnit(lldb::SBCompileUnit unit) {
 /// See
 /// https://microsoft.github.io/debug-adapter-protocol/specification#Reverse_Requests_RunInTerminal
 llvm::json::Object
-CreateRunInTerminalReverseRequest(const llvm::json::Object &launch_request/*,
+CreateRunInTerminalReverseRequest(/*const llvm::json::Object &launch_request,
                                   llvm::StringRef debug_adaptor_path,
                                   llvm::StringRef comm_file,
                                   lldb::pid_t debugger_pid*/) {
@@ -1124,7 +1124,7 @@ CreateRunInTerminalReverseRequest(const llvm::json::Object &launch_request/*,
   // terminal in a new window.
   run_in_terminal_args.try_emplace("kind", "integrated");
 
-  auto launch_request_arguments = launch_request.getObject("arguments");
+  //auto launch_request_arguments = launch_request.getObject("arguments");
   // The program path must be the first entry in the "args" field
   std::vector<std::string> args;/* = {
       debug_adaptor_path.str(), "--comm-file", comm_file.str()};
@@ -1139,9 +1139,9 @@ CreateRunInTerminalReverseRequest(const llvm::json::Object &launch_request/*,
   args.insert(args.end(), target_args.begin(), target_args.end());*/
   run_in_terminal_args.try_emplace("args", args);
 
-  const auto cwd = GetString(launch_request_arguments, "cwd");
-  if (!cwd.empty())
-    run_in_terminal_args.try_emplace("cwd", cwd);
+  //const auto cwd = GetString(launch_request_arguments, "cwd");
+  //if (!cwd.empty())
+  //  run_in_terminal_args.try_emplace("cwd", cwd);
 
   // We need to convert the input list of environments variables into a
   // dictionary

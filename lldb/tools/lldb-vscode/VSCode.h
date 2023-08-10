@@ -256,6 +256,8 @@ struct VSCode {
   PacketStatus GetNextObject(llvm::json::Object &object);
   bool HandleObject(const llvm::json::Object &object);
 
+  bool HandleNextObject(llvm::Error& error);
+  llvm::Error HandleNextObject();
   llvm::Error Loop();
 
   /// Send a Debug Adapter Protocol reverse request to the IDE.
