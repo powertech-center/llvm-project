@@ -1684,15 +1684,13 @@ void request_initialize(const llvm::json::Object &request) {
 // runInTerminal if applicable. It doesn't do any of the additional
 // initialization and bookkeeping stuff that is needed for `request_launch`.
 // This way we can reuse the process launching logic for RestartRequest too.
-lldb::SBLaunchInfo launch_info(nullptr);
-
 lldb::SBError LaunchProcess(const llvm::json::Object &request) {
   lldb::SBError error;
   auto arguments = request.getObject("arguments");
   auto launchCommands = GetStrings(arguments, "launchCommands");
 
   // Instantiate a launch info instance for the target.
-  launch_info = g_vsc.target.GetLaunchInfo();
+  auto launch_info = g_vsc.target.GetLaunchInfo();
 
   // Grab the current working directory if there is one and set it in the
   // launch info.
@@ -1732,18 +1730,24 @@ lldb::SBError LaunchProcess(const llvm::json::Object &request) {
 
   //  g_vsc.SendOutput(OutputType::Stdout, "Перед захватом терминала\n");
 
+    static lldb::pid_t shellProcessId = LLDB_INVALID_PROCESS_ID;
+
+
     llvm::json::Object reverse_request = CreateRunInTerminalReverseRequest(
       /*request, g_vsc.debug_adaptor_path, comm_file.m_path, debugger_pid*/);
     g_vsc.SendReverseRequest("runInTerminal", std::move(reverse_request),
       [](llvm::Expected<llvm::json::Value> value) {
-        g_vsc.SendOutput(OutputType::Stdout, "Внутри захвата терминала\n");
+       // g_vsc.SendOutput(OutputType::Stdout, "Внутри захвата терминала\n");
         if (!value) {
+          shellProcessId = LLDB_INVALID_PROCESS_ID;
           llvm::Error err = value.takeError();
           llvm::errs()
               << "runInTerminal request failed: "
               << llvm::toString(std::move(err)) << "\n";
         } {
-          g_vsc.SendOutput(OutputType::Stdout, "Терминал создан: " + JSONToString(*value) + "\n");
+          llvm::json::Object *obj = value->getAsObject();
+          shellProcessId = GetUnsigned(obj, "shellProcessId", LLDB_INVALID_PROCESS_ID);;
+      //    g_vsc.SendOutput(OutputType::Stdout, "Терминал создан: " + JSONToString(*value) + "\n");
         }
       });
 
@@ -1754,11 +1758,13 @@ lldb::SBError LaunchProcess(const llvm::json::Object &request) {
         *g_vsc.log << ErrText;
     }
 
-          g_vsc.SendOutput(OutputType::Stdout, "Перед лаунчем\n");
+    g_vsc.SendOutput(OutputType::Stdout, "shellProcessId: " + std::to_string(shellProcessId) + "\n");
+
+    //      g_vsc.SendOutput(OutputType::Stdout, "Перед лаунчем\n");
           g_vsc.debugger.SetAsync(false);
           g_vsc.target.Launch(launch_info, error);
           g_vsc.debugger.SetAsync(true);
-          g_vsc.SendOutput(OutputType::Stdout, "После лаунча\n");
+      //    g_vsc.SendOutput(OutputType::Stdout, "После лаунча\n");
 
 
    // g_vsc.SendOutput(OutputType::Stdout, "После захвата терминала\n");
