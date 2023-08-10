@@ -1743,10 +1743,16 @@ lldb::SBError LaunchProcess(const llvm::json::Object &request) {
               << "runInTerminal request failed: "
               << llvm::toString(std::move(err)) << "\n";
         } {
-          g_vsc.SendOutput(OutputType::Stdout, "Терминал создан\n");
+          g_vsc.SendOutput(OutputType::Stdout, "Терминал создан: " + JSONToString(*value) + "\n");
         }
       });
-      auto handle_error = g_vsc.HandleNextObject();
+
+    if (auto Err = g_vsc.HandleNextObject()) {
+      auto ErrText = "Transport Error: " + llvm::toString(std::move(Err)) + "\n";
+      g_vsc.SendOutput(OutputType::Stderr, ErrText);
+      if (g_vsc.log)
+        *g_vsc.log << ErrText;
+    }
 
           g_vsc.SendOutput(OutputType::Stdout, "Перед лаунчем\n");
           g_vsc.debugger.SetAsync(false);
