@@ -3640,14 +3640,38 @@ void SelectionDAGBuilder::visitAddrSpaceCast(const User &I) {
   const Value *SV = I.getOperand(0);
   SDValue N = getValue(SV);
   EVT DestVT = TLI.getValueType(DAG.getDataLayout(), I.getType());
+  SDLoc dl = getCurSDLoc();
 
   unsigned SrcAS = SV->getType()->getPointerAddressSpace();
   unsigned DestAS = I.getType()->getPointerAddressSpace();
+  bool Catched = false;
 
-  if (!TM.isNoopAddrSpaceCast(SrcAS, DestAS))
-    N = DAG.getAddrSpaceCast(getCurSDLoc(), DestVT, N, SrcAS, DestAS);
-
+  if (TLI.getTargetMachine().getTargetTriple().getArch() ==
+      llvm::Triple::aarch64) {   
+    EVT DVT = MVT::i32;
+    N = DAG.getPtrExtOrTrunc(N, dl,  DVT);
+    N = DAG.getZExtOrTrunc(N, dl, DVT);
+    if (SrcAS == 270) {
+       N = DAG.getNode(ISD::SIGN_EXTEND, dl, DestVT, N, DAG.getTargetConstant(
+                               0, dl, DestVT));
+      Catched = true;
+    } else if (SrcAS == 271) {
+      N = DAG.getNode(ISD::ZERO_EXTEND, dl, DestVT, N, DAG.getTargetConstant(
+                               0, dl, DestVT));
+      Catched = true;
+    } else if (SrcAS == 0) {
+      N = DAG.getNode(ISD::TRUNCATE, dl, DVT, N,
+                           DAG.getTargetConstant(
+                               0, dl, DVT));
+      Catched = true;
+    }
+  }
+  if (!Catched){
+    if (!TM.isNoopAddrSpaceCast(SrcAS, DestAS))
+    N = DAG.getAddrSpaceCast(dl, DestVT, N, SrcAS, DestAS);
+  }
   setValue(&I, N);
+
 }
 
 void SelectionDAGBuilder::visitInsertElement(const User &I) {
@@ -4228,6 +4252,27 @@ void SelectionDAGBuilder::visitLoad(const LoadInst &I) {
   SmallVector<SDValue, 4> Chains(std::min(MaxParallelChains, NumValues));
   EVT PtrVT = Ptr.getValueType();
 
+
+  if (TLI.getTargetMachine().getTargetTriple().getArch() ==
+      llvm::Triple::aarch64) {
+    unsigned SrcAS = SV->getType()->getPointerAddressSpace();
+    if ((SrcAS == 270) || (SrcAS == 271)) {
+      MVT DVT = MVT::i32;
+      MVT DestVT = MVT::i64;
+
+      Ptr = DAG.getPtrExtOrTrunc(Ptr, dl, DVT);
+      Ptr = DAG.getZExtOrTrunc(Ptr, dl, DVT);
+      if (SrcAS == 270) {
+        Ptr = DAG.getNode(ISD::SIGN_EXTEND, dl, DestVT, Ptr,
+                          DAG.getTargetConstant(0, dl, DestVT));
+      } else if (SrcAS == 271) {
+        Ptr = DAG.getNode(ISD::ZERO_EXTEND, dl, DestVT, Ptr,
+                          DAG.getTargetConstant(0, dl, DestVT));
+      }
+    }
+  }
+
+
   unsigned ChainI = 0;
   for (unsigned i = 0; i != NumValues; ++i, ++ChainI) {
     // Serializing loads here may result in excessive register pressure, and
@@ -4364,9 +4409,29 @@ void SelectionDAGBuilder::visitStore(const StoreInst &I) {
   SDValue Src = getValue(SrcV);
   SDValue Ptr = getValue(PtrV);
 
+  SDLoc dl = getCurSDLoc();
+  if (TLI.getTargetMachine().getTargetTriple().getArch() ==
+      llvm::Triple::aarch64) {
+    unsigned SrcAS = PtrV->getType()->getPointerAddressSpace();
+    if ((SrcAS == 270) || (SrcAS == 271)) {
+      MVT DVT = MVT::i32;
+      MVT DestVT = MVT::i64;
+
+      Ptr = DAG.getPtrExtOrTrunc(Ptr, dl, DVT);
+      Ptr = DAG.getZExtOrTrunc(Ptr, dl, DVT);
+      if (SrcAS == 270) {
+        Ptr = DAG.getNode(ISD::SIGN_EXTEND, dl, DestVT, Ptr,
+                          DAG.getTargetConstant(0, dl, DestVT));
+      } else if (SrcAS == 271) {
+        Ptr = DAG.getNode(ISD::ZERO_EXTEND, dl, DestVT, Ptr,
+                          DAG.getTargetConstant(0, dl, DestVT));
+      }
+    }
+  }
+
+
   SDValue Root = I.isVolatile() ? getRoot() : getMemoryRoot();
   SmallVector<SDValue, 4> Chains(std::min(MaxParallelChains, NumValues));
-  SDLoc dl = getCurSDLoc();
   Align Alignment = I.getAlign();
   AAMDNodes AAInfo = I.getAAMetadata();
 

@@ -127,11 +127,16 @@ void AArch64InstPrinter::printInst(const MCInst *MI, uint64_t Address,
         break;
       case 31:
         // *xtw is only valid for signed 64-bit operations.
-        if (Is64Bit && IsSigned)
-          AsmMnemonic = "sxtw";
+        if (Is64Bit) {
+          if (IsSigned) {
+            AsmMnemonic = "sxtw";
+          } else {
+            AsmMnemonic = "uxtw";
+          }
+        }
         break;
       }
-
+      
       if (AsmMnemonic) {
         O << '\t' << AsmMnemonic << '\t';
         printRegName(O, Op0.getReg());
