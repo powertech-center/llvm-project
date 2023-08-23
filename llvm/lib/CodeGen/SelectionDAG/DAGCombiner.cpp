@@ -13297,6 +13297,25 @@ SDValue DAGCombiner::visitZERO_EXTEND(SDNode *N) {
   if (SDValue Res = tryToFoldExtendOfConstant(N, TLI, DAG, LegalTypes))
     return Res;
 
+  if (TLI.getTargetMachine().getTargetTriple().getArch() ==
+      llvm::Triple::aarch64) {
+    if (N0.getOpcode() == ISD::TRUNCATE) {
+
+      if (SDValue lowerLoad = reduceLoadWidth(N0.getNode())) {
+        SDNode *load = N0.getOperand(0).getNode();
+
+        if (lowerLoad.getNode() != N0.getNode()) {
+          CombineTo(N0.getNode(), lowerLoad);
+          AddToWorklist(load);
+        }
+      }
+      if (SDValue ExtLoad = CombineExtLoad(N))
+        return ExtLoad;
+      return SDValue(N, 0);
+    }
+  }
+  
+
   // fold (zext (zext x)) -> (zext x)
   // fold (zext (aext x)) -> (zext x)
   if (N0.getOpcode() == ISD::ZERO_EXTEND || N0.getOpcode() == ISD::ANY_EXTEND)

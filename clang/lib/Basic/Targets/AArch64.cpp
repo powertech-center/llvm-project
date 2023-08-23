@@ -129,7 +129,7 @@ void AArch64TargetInfo::setArchFeatures() {
 
 AArch64TargetInfo::AArch64TargetInfo(const llvm::Triple &Triple,
                                      const TargetOptions &Opts)
-    : TargetInfo(Triple), ABI("aapcs") {
+    : TargetInfo(Triple), ABI("aapcs") {    
   if (getTriple().isOSOpenBSD()) {
     Int64Type = SignedLongLong;
     IntMaxType = SignedLongLong;
@@ -140,6 +140,8 @@ AArch64TargetInfo::AArch64TargetInfo(const llvm::Triple &Triple,
     Int64Type = SignedLong;
     IntMaxType = SignedLong;
   }
+
+   AddrSpaceMap = &ARM64AddrSpaceMap;
 
   // All AArch64 implementations support ARMv8 FP, which makes half a legal type.
   HasLegalHalfType = true;
@@ -1375,11 +1377,11 @@ AArch64leTargetInfo::AArch64leTargetInfo(const llvm::Triple &Triple,
 void AArch64leTargetInfo::setDataLayout() {
   if (getTriple().isOSBinFormatMachO()) {
     if(getTriple().isArch32Bit())
-      resetDataLayout("e-m:o-p:32:32-i64:64-i128:128-n32:64-S128", "_");
+      resetDataLayout("e-m:o-p:32:32-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-n32:64-S128", "_");
     else
-      resetDataLayout("e-m:o-i64:64-i128:128-n32:64-S128", "_");
+      resetDataLayout("e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-n32:64-S128", "_");
   } else
-    resetDataLayout("e-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128");
+    resetDataLayout("e-m:e-i8:8:32-i16:16:32-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-n32:64-S128");
 }
 
 void AArch64leTargetInfo::getTargetDefines(const LangOptions &Opts,
@@ -1402,7 +1404,7 @@ void AArch64beTargetInfo::getTargetDefines(const LangOptions &Opts,
 
 void AArch64beTargetInfo::setDataLayout() {
   assert(!getTriple().isOSBinFormatMachO());
-  resetDataLayout("E-m:e-i8:8:32-i16:16:32-i64:64-i128:128-n32:64-S128");
+  resetDataLayout("E-m:e-i8:8:32-i16:16:32-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-n32:64-S128");
 }
 
 WindowsARM64TargetInfo::WindowsARM64TargetInfo(const llvm::Triple &Triple,
@@ -1425,8 +1427,8 @@ WindowsARM64TargetInfo::WindowsARM64TargetInfo(const llvm::Triple &Triple,
 
 void WindowsARM64TargetInfo::setDataLayout() {
   resetDataLayout(Triple.isOSBinFormatMachO()
-                      ? "e-m:o-i64:64-i128:128-n32:64-S128"
-                      : "e-m:w-p:64:64-i32:32-i64:64-i128:128-n32:64-S128",
+                      ? "e-m:o-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-n32:64-S128"
+                      : "e-m:w-p:64:64-i32:32-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-n32:64-S128",
                   Triple.isOSBinFormatMachO() ? "_" : "");
 }
 

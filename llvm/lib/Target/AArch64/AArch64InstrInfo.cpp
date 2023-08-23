@@ -3828,6 +3828,18 @@ void AArch64InstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     return;
   }
 
+  if (AArch64::GPR32RegClass.contains(DestReg) &&
+      AArch64::GPR64RegClass.contains(SrcReg)) {
+    const TargetRegisterInfo *TRI = &getRegisterInfo();
+    MCRegister DestRegX = TRI->getMatchingSuperReg(DestReg, AArch64::sub_32,
+                                                   &AArch64::GPR64spRegClass);
+    BuildMI(MBB, I, DL, get(AArch64::UBFMXri), DestRegX)
+        .addReg(SrcReg, getKillRegState(KillSrc))
+        .addImm(0)
+        .addImm(31);
+    return;
+  }
+
 #ifndef NDEBUG
   const TargetRegisterInfo &TRI = getRegisterInfo();
   errs() << TRI.getRegAsmName(DestReg) << " = COPY "
