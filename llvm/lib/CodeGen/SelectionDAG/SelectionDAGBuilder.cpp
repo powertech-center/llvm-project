@@ -3640,38 +3640,15 @@ void SelectionDAGBuilder::visitAddrSpaceCast(const User &I) {
   const Value *SV = I.getOperand(0);
   SDValue N = getValue(SV);
   EVT DestVT = TLI.getValueType(DAG.getDataLayout(), I.getType());
-  SDLoc dl = getCurSDLoc();
+  SDLoc Dl = getCurSDLoc();
 
   unsigned SrcAS = SV->getType()->getPointerAddressSpace();
   unsigned DestAS = I.getType()->getPointerAddressSpace();
-  bool Catched = false;
 
-  if (TLI.getTargetMachine().getTargetTriple().getArch() ==
-      llvm::Triple::aarch64) {   
-    EVT DVT = MVT::i32;
-    N = DAG.getPtrExtOrTrunc(N, dl,  DVT);
-    N = DAG.getZExtOrTrunc(N, dl, DVT);
-    if (SrcAS == 270) {
-       N = DAG.getNode(ISD::SIGN_EXTEND, dl, DestVT, N, DAG.getTargetConstant(
-                               0, dl, DestVT));
-      Catched = true;
-    } else if (SrcAS == 271) {
-      N = DAG.getNode(ISD::ZERO_EXTEND, dl, DestVT, N, DAG.getTargetConstant(
-                               0, dl, DestVT));
-      Catched = true;
-    } else if (SrcAS == 0) {
-      N = DAG.getNode(ISD::TRUNCATE, dl, DVT, N,
-                           DAG.getTargetConstant(
-                               0, dl, DVT));
-      Catched = true;
-    }
-  }
-  if (!Catched){
-    if (!TM.isNoopAddrSpaceCast(SrcAS, DestAS))
-    N = DAG.getAddrSpaceCast(dl, DestVT, N, SrcAS, DestAS);
-  }
+  if (!TM.isNoopAddrSpaceCast(SrcAS, DestAS))
+    N = DAG.getAddrSpaceCast(Dl, DestVT, N, SrcAS, DestAS);
+
   setValue(&I, N);
-
 }
 
 void SelectionDAGBuilder::visitInsertElement(const User &I) {

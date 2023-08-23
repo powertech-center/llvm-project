@@ -480,6 +480,9 @@ AArch64TargetLowering::AArch64TargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::XOR, MVT::i32, Custom);
   setOperationAction(ISD::XOR, MVT::i64, Custom);
 
+  setOperationAction(ISD::ADDRSPACECAST, MVT::i32, Custom);
+  setOperationAction(ISD::ADDRSPACECAST, MVT::i64, Custom);
+
   // Virtually no operation on f128 is legal, but LLVM can't expand them when
   // there's a valid register class, so we need custom operations in most cases.
   setOperationAction(ISD::FABS, MVT::f128, Expand);
@@ -5600,6 +5603,41 @@ static SDValue LowerTruncateVectorStore(SDLoc DL, StoreSDNode *ST,
                       ST->getBasePtr(), ST->getMemOperand());
 }
 
+static SDValue LowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG) {
+  SDLoc dl(Op);
+  SDValue Src = Op.getOperand(0);
+  MVT DestVT = Op.getSimpleValueType();
+  AddrSpaceCastSDNode *N = cast<AddrSpaceCastSDNode>(Op.getNode());
+  unsigned SrcAS = N->getSrcAddressSpace();
+  unsigned DestAS = N->getDestAddressSpace();
+
+  assert(SrcAS != DestAS &&
+         "addrspacecast must be between different address spaces");
+
+  EVT LowerVT = MVT::i32;
+
+  if ((SrcAS == ARM64AS::PTR32_SPTR || SrcAS == ARM64AS::PTR32_UPTR) ||
+      (DestAS == ARM64AS::PTR32_SPTR || DestAS == ARM64AS::PTR32_UPTR)) {
+    Src = DAG.getPtrExtOrTrunc(Src, dl, LowerVT);
+    Src = DAG.getZExtOrTrunc(Src, dl, LowerVT);
+
+    if (SrcAS == ARM64AS::PTR32_SPTR) {
+      return DAG.getNode(ISD::SIGN_EXTEND, dl, DestVT, Src,
+                         DAG.getTargetConstant(0, dl, DestVT));
+    } else if (SrcAS == ARM64AS::PTR32_UPTR) {
+      return DAG.getNode(ISD::ZERO_EXTEND, dl, DestVT, Src, DAG.getTargetConstant(0, dl, DestVT));
+    } else if ((DestAS == ARM64AS::PTR32_SPTR) ||
+               (DestAS == ARM64AS::PTR32_UPTR)) {         
+       SDValue Ext = DAG.getAnyExtOrTrunc(Src.getOperand(0), dl, DestVT);
+       SDValue Trunc = DAG.getZeroExtendInReg(Ext, dl, LowerVT);
+       return Trunc;
+
+    }
+  }
+  return Op;
+}
+
+
 // Custom lowering for any store, vector or scalar and/or default or with
 // a truncate operations.  Currently only custom lower truncate operation
 // from vector v4i16 to v4i8 or volatile stores of i128.
@@ -6016,6 +6054,8 @@ SDValue AArch64TargetLowering::LowerOperation(SDValue Op,
   case ISD::SIGN_EXTEND:
   case ISD::ZERO_EXTEND:
     return LowerFixedLengthVectorIntExtendToSVE(Op, DAG);
+  case ISD::ADDRSPACECAST:
+    return LowerADDRSPACECAST(Op, DAG);  
   case ISD::SIGN_EXTEND_INREG: {
     // Only custom lower when ExtraVT has a legal byte based element type.
     EVT ExtraVT = cast<VTSDNode>(Op.getOperand(1))->getVT();
@@ -19621,6 +19661,7 @@ performSignExtendSetCCCombine(SDNode *N, TargetLowering::DAGCombinerInfo &DCI,
 static SDValue performExtendCombine(SDNode *N,
                                     TargetLowering::DAGCombinerInfo &DCI,
                                     SelectionDAG &DAG) {
+                                 
   // If we see something like (zext (sabd (extract_high ...), (DUP ...))) then
   // we can convert that DUP into another extract_high (of a bigger DUP), which
   // helps the backend to decide that an sabdl2 would be useful, saving a real
@@ -23916,6 +23957,11 @@ void AArch64TargetLowering::ReplaceNodeResults(
     return;
   }
   case ISD::ATOMIC_LOAD:
+  case ISD::ADDRSPACECAST: {
+    SDValue V = LowerADDRSPACECAST(SDValue(N,0), DAG);
+    Results.push_back(V);
+    return;
+  }
   case ISD::LOAD: {
     MemSDNode *LoadNode = cast<MemSDNode>(N);
     EVT MemVT = LoadNode->getMemoryVT();

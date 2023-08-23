@@ -13586,16 +13586,6 @@ SDValue DAGCombiner::visitANY_EXTEND(SDNode *N) {
   if (SDValue Res = tryToFoldExtendOfConstant(N, TLI, DAG, LegalTypes))
     return Res;
 
-  if ((N0.getOpcode() == ISD::TRUNCATE)) {
-    SDValue Op = DAG.getAnyExtOrTrunc(N0.getOperand(0), SDLoc(N), VT);
-    AddToWorklist(Op.getNode());
-    SDValue And = DAG.getZeroExtendInReg(Op, SDLoc(N), MVT::i32);
-    // We may safely transfer the debug info describing the truncate node over
-    // to the equivalent and operation.
-    DAG.transferDbgValues(N0, And);
-    return And;
-  }  
-
   // fold (aext (aext x)) -> (aext x)
   // fold (aext (zext x)) -> (zext x)
   // fold (aext (sext x)) -> (sext x)
@@ -14341,8 +14331,8 @@ SDValue DAGCombiner::visitTRUNCATE(SDNode *N) {
   bool isLE = DAG.getDataLayout().isLittleEndian();
 
   // noop truncate
-  //if (SrcVT == VT)
-    //return N0;
+  if (SrcVT == VT)
+    return N0;
 
   // fold (truncate (truncate x)) -> (truncate x)
   if (N0.getOpcode() == ISD::TRUNCATE)

@@ -129,7 +129,7 @@ void AArch64TargetInfo::setArchFeatures() {
 
 AArch64TargetInfo::AArch64TargetInfo(const llvm::Triple &Triple,
                                      const TargetOptions &Opts)
-    : TargetInfo(Triple), ABI("aapcs") {
+    : TargetInfo(Triple), ABI("aapcs") {    
   if (getTriple().isOSOpenBSD()) {
     Int64Type = SignedLongLong;
     IntMaxType = SignedLongLong;
@@ -140,6 +140,8 @@ AArch64TargetInfo::AArch64TargetInfo(const llvm::Triple &Triple,
     Int64Type = SignedLong;
     IntMaxType = SignedLong;
   }
+
+   AddrSpaceMap = &ARM64AddrSpaceMap;
 
   // All AArch64 implementations support ARMv8 FP, which makes half a legal type.
   HasLegalHalfType = true;
