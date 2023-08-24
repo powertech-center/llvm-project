@@ -18,7 +18,9 @@
 #include "llvm/Support/FormatVariadic.h"
 
 #if defined(_WIN32)
+#if !defined(NOMINMAX)
 #define NOMINMAX
+#endif
 #include <fcntl.h>
 #include <io.h>
 #include <windows.h>
@@ -597,32 +599,50 @@ bool VSCode::HandleObject(const llvm::json::Object &object) {
   return false;
 }
 
-llvm::Error VSCode::Loop() {
-  while (!sent_terminated_event) {
+bool VSCode::HandleNextObject(llvm::Error& error) {
+  if (!sent_terminated_event) {
     llvm::json::Object object;
     lldb_vscode::PacketStatus status = GetNextObject(object);
 
-    if (status == lldb_vscode::PacketStatus::EndOfFile) {
-      break;
-    }
+    if (status != lldb_vscode::PacketStatus::EndOfFile) {
+      if (status != lldb_vscode::PacketStatus::Success) {
+        error = llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                        "failed to send packet");
+        return false;
+      }
 
-    if (status != lldb_vscode::PacketStatus::Success) {
-      return llvm::createStringError(llvm::inconvertibleErrorCode(),
-                                     "failed to send packet");
-    }
+      if (!HandleObject(object)) {
+        error = llvm::createStringError(llvm::inconvertibleErrorCode(),
+                                        "unhandled packet");
+        return false;
+      }
 
-    if (!HandleObject(object)) {
-      return llvm::createStringError(llvm::inconvertibleErrorCode(),
-                                     "unhandled packet");
+      return true;
     }
   }
 
-  return llvm::Error::success();
+  error = llvm::Error::success();
+  return false;
+}
+
+llvm::Error VSCode::HandleNextObject() {
+  llvm::Error error = llvm::Error::success();
+  HandleNextObject(error);
+  return error;
+}
+
+llvm::Error VSCode::Loop() {
+  llvm::Error error = llvm::Error::success();
+
+  while (HandleNextObject(error)) {}
+
+  return error;
 }
 
 void VSCode::SendReverseRequest(llvm::StringRef command,
                                 llvm::json::Value arguments,
-                                ResponseCallback callback) {
+                                ResponseCallback callback,
+                                bool wait) {
   int64_t id;
   {
     std::lock_guard<std::mutex> locker(call_mutex);
@@ -636,6 +656,15 @@ void VSCode::SendReverseRequest(llvm::StringRef command,
       {"command", command},
       {"arguments", std::move(arguments)},
   });
+
+  if (wait) {
+    if (auto Err = HandleNextObject()) {
+      auto ErrText = "Transport Error: " + llvm::toString(std::move(Err)) + "\n";
+      SendOutput(OutputType::Stderr, ErrText);
+      if (log)
+        *log << ErrText;
+    }
+  }
 }
 
 void VSCode::RegisterRequestCallback(std::string request,

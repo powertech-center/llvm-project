@@ -22,7 +22,9 @@
 // We also need to #undef GetObject (which is defined to GetObjectW) because
 // the JSON code we use also has methods named `GetObject()` and we conflict
 // against these.
+#if !defined(NOMINMAX)
 #define NOMINMAX
+#endif
 #include <windows.h>
 #undef GetObject
 #include <io.h>
@@ -122,7 +124,7 @@ lldb::SBValueList *GetTopLevelScope(int64_t variablesReference) {
   }
 }
 
-SOCKET AcceptConnection(int portno) {
+/*SOCKET AcceptConnection(int portno) {
   // Accept a socket connection from any host on "portno".
   SOCKET newsockfd = -1;
   struct sockaddr_in serv_addr, cli_addr;
@@ -159,7 +161,7 @@ SOCKET AcceptConnection(int portno) {
 #endif
   }
   return newsockfd;
-}
+}*/
 
 std::vector<const char *> MakeArgv(const llvm::ArrayRef<std::string> &strs) {
   // Create and return an array of "const char *", one for each C string in
@@ -1607,77 +1609,6 @@ void request_initialize(const llvm::json::Object &request) {
   g_vsc.SendJSON(llvm::json::Value(std::move(response)));
 }
 
-llvm::Error request_runInTerminal(const llvm::json::Object &launch_request,
-                                  const uint64_t timeout_seconds) {
-  g_vsc.is_attach = true;
-  lldb::SBAttachInfo attach_info;
-
-  llvm::Expected<std::shared_ptr<FifoFile>> comm_file_or_err =
-      CreateRunInTerminalCommFile();
-  if (!comm_file_or_err)
-    return comm_file_or_err.takeError();
-  FifoFile &comm_file = *comm_file_or_err.get();
-
-  RunInTerminalDebugAdapterCommChannel comm_channel(comm_file.m_path);
-
-  lldb::pid_t debugger_pid = LLDB_INVALID_PROCESS_ID;
-#if !defined(_WIN32)
-  debugger_pid = getpid();
-#endif
-  llvm::json::Object reverse_request = CreateRunInTerminalReverseRequest(
-      launch_request, g_vsc.debug_adaptor_path, comm_file.m_path, debugger_pid);
-  g_vsc.SendReverseRequest("runInTerminal", std::move(reverse_request),
-                           [](llvm::Expected<llvm::json::Value> value) {
-                             if (!value) {
-                               llvm::Error err = value.takeError();
-                               llvm::errs()
-                                   << "runInTerminal request failed: "
-                                   << llvm::toString(std::move(err)) << "\n";
-                             }
-                           });
-
-  if (llvm::Expected<lldb::pid_t> pid = comm_channel.GetLauncherPid())
-    attach_info.SetProcessID(*pid);
-  else
-    return pid.takeError();
-
-  g_vsc.debugger.SetAsync(false);
-  lldb::SBError error;
-  g_vsc.target.Attach(attach_info, error);
-
-  if (error.Fail())
-    return llvm::createStringError(llvm::inconvertibleErrorCode(),
-                                   "Failed to attach to the target process. %s",
-                                   comm_channel.GetLauncherError().c_str());
-  // This will notify the runInTerminal launcher that we attached.
-  // We have to make this async, as the function won't return until the launcher
-  // resumes and reads the data.
-  std::future<lldb::SBError> did_attach_message_success =
-      comm_channel.NotifyDidAttach();
-
-  // We just attached to the runInTerminal launcher, which was waiting to be
-  // attached. We now resume it, so it can receive the didAttach notification
-  // and then perform the exec. Upon continuing, the debugger will stop the
-  // process right in the middle of the exec. To the user, what we are doing is
-  // transparent, as they will only be able to see the process since the exec,
-  // completely unaware of the preparatory work.
-  g_vsc.target.GetProcess().Continue();
-
-  // Now that the actual target is just starting (i.e. exec was just invoked),
-  // we return the debugger to its async state.
-  g_vsc.debugger.SetAsync(true);
-
-  // If sending the notification failed, the launcher should be dead by now and
-  // the async didAttach notification should have an error message, so we
-  // return it. Otherwise, everything was a success.
-  did_attach_message_success.wait();
-  error = did_attach_message_success.get();
-  if (error.Success())
-    return llvm::Error::success();
-  return llvm::createStringError(llvm::inconvertibleErrorCode(),
-                                 error.GetCString());
-}
-
 // Takes a LaunchRequest object and launches the process, also handling
 // runInTerminal if applicable. It doesn't do any of the additional
 // initialization and bookkeeping stuff that is needed for `request_launch`.
@@ -1719,30 +1650,33 @@ lldb::SBError LaunchProcess(const llvm::json::Object &request) {
   launch_info.SetDetachOnError(detachOnError);
   launch_info.SetLaunchFlags(flags | lldb::eLaunchFlagDebug |
                              lldb::eLaunchFlagStopAtEntry);
-  const uint64_t timeout_seconds = GetUnsigned(arguments, "timeout", 30);
 
-  if (GetBoolean(arguments, "runInTerminal", false)) {
-    if (llvm::Error err = request_runInTerminal(request, timeout_seconds))
-      error.SetErrorString(llvm::toString(std::move(err)).c_str());
-  } else if (launchCommands.empty()) {
-    // Disable async events so the launch will be successful when we return from
-    // the launch call and the launch will happen synchronously
-    g_vsc.debugger.SetAsync(false);
-    g_vsc.target.Launch(launch_info, error);
-    g_vsc.debugger.SetAsync(true);
-  } else {
-    // Set the launch info so that run commands can access the configured
-    // launch details.
-    g_vsc.target.SetLaunchInfo(launch_info);
-    g_vsc.RunLLDBCommands("Running launchCommands:", launchCommands);
-    // The custom commands might have created a new target so we should use the
-    // selected target after these commands are run.
-    g_vsc.target = g_vsc.debugger.GetSelectedTarget();
-    // Make sure the process is launched and stopped at the entry point before
-    // proceeding as the the launch commands are not run using the synchronous
-    // mode.
-    error = g_vsc.WaitForProcessToStop(timeout_seconds);
-  }
+  // Prepare "runInTerminal" request and return the terminal process id
+  static lldb::pid_t shellProcessId;
+  shellProcessId = LLDB_INVALID_PROCESS_ID;
+  llvm::json::Object reverse_request;
+  reverse_request.try_emplace("kind", "integrated");
+  std::vector<std::string> reverse_request_args;
+  reverse_request.try_emplace("args", reverse_request_args);
+  if (!cwd.empty())
+    reverse_request.try_emplace("cwd", cwd);
+  g_vsc.SendReverseRequest("runInTerminal", std::move(reverse_request),
+    [](llvm::Expected<llvm::json::Value> value) {
+      if (!value) {
+        llvm::Error err = value.takeError();
+        llvm::errs()
+            << "runInTerminal request failed: "
+            << llvm::toString(std::move(err)) << "\n";
+      } else {
+        llvm::json::Object *obj = value->getAsObject();
+        shellProcessId = GetUnsigned(obj, "shellProcessId", LLDB_INVALID_PROCESS_ID);;
+      }
+    }, true/*wait*/);
+
+  g_vsc.debugger.SetAsync(false);
+  g_vsc.target.Launch(launch_info, error);
+  g_vsc.debugger.SetAsync(true);
+
   return error;
 }
 
@@ -3296,135 +3230,6 @@ void RegisterRequestCallbacks() {
 
 } // anonymous namespace
 
-static void printHelp(LLDBVSCodeOptTable &table, llvm::StringRef tool_name) {
-  std::string usage_str = tool_name.str() + " options";
-  table.printHelp(llvm::outs(), usage_str.c_str(), "LLDB VSCode", false);
-
-  std::string examples = R"___(
-EXAMPLES:
-  The debug adapter can be started in two modes.
-
-  Running lldb-vscode without any arguments will start communicating with the
-  parent over stdio. Passing a port number causes lldb-vscode to start listening
-  for connections on that port.
-
-    lldb-vscode -p <port>
-
-  Passing --wait-for-debugger will pause the process at startup and wait for a
-  debugger to attach to the process.
-
-    lldb-vscode -g
-  )___";
-  llvm::outs() << examples;
-}
-
-// If --launch-target is provided, this instance of lldb-vscode becomes a
-// runInTerminal launcher. It will ultimately launch the program specified in
-// the --launch-target argument, which is the original program the user wanted
-// to debug. This is done in such a way that the actual debug adaptor can
-// place breakpoints at the beginning of the program.
-//
-// The launcher will communicate with the debug adaptor using a fifo file in the
-// directory specified in the --comm-file argument.
-//
-// Regarding the actual flow, this launcher will first notify the debug adaptor
-// of its pid. Then, the launcher will be in a pending state waiting to be
-// attached by the adaptor.
-//
-// Once attached and resumed, the launcher will exec and become the program
-// specified by --launch-target, which is the original target the
-// user wanted to run.
-//
-// In case of errors launching the target, a suitable error message will be
-// emitted to the debug adaptor.
-void LaunchRunInTerminalTarget(llvm::opt::Arg &target_arg,
-                               llvm::StringRef comm_file,
-                               lldb::pid_t debugger_pid, char *argv[]) {
-#if defined(_WIN32)
-  llvm::errs() << "runInTerminal is only supported on POSIX systems\n";
-  exit(EXIT_FAILURE);
-#else
-
-  // On Linux with the Yama security module enabled, a process can only attach
-  // to its descendants by default. In the runInTerminal case the target
-  // process is launched by the client so we need to allow tracing explicitly.
-#if defined(__linux__)
-  if (debugger_pid != LLDB_INVALID_PROCESS_ID)
-    (void)prctl(PR_SET_PTRACER, debugger_pid, 0, 0, 0);
-#endif
-
-  RunInTerminalLauncherCommChannel comm_channel(comm_file);
-  if (llvm::Error err = comm_channel.NotifyPid()) {
-    llvm::errs() << llvm::toString(std::move(err)) << "\n";
-    exit(EXIT_FAILURE);
-  }
-
-  // We will wait to be attached with a timeout. We don't wait indefinitely
-  // using a signal to prevent being paused forever.
-
-  // This env var should be used only for tests.
-  const char *timeout_env_var = getenv("LLDB_VSCODE_RIT_TIMEOUT_IN_MS");
-  int timeout_in_ms =
-      timeout_env_var != nullptr ? atoi(timeout_env_var) : 20000;
-  if (llvm::Error err = comm_channel.WaitUntilDebugAdaptorAttaches(
-          std::chrono::milliseconds(timeout_in_ms))) {
-    llvm::errs() << llvm::toString(std::move(err)) << "\n";
-    exit(EXIT_FAILURE);
-  }
-
-  const char *target = target_arg.getValue();
-  execvp(target, argv);
-
-  std::string error = std::strerror(errno);
-  comm_channel.NotifyError(error);
-  llvm::errs() << error << "\n";
-  exit(EXIT_FAILURE);
-#endif
-}
-
-/// used only by TestVSCode_redirection_to_console.py
-void redirection_test() {
-  printf("stdout message\n");
-  fprintf(stderr, "stderr message\n");
-  fflush(stdout);
-  fflush(stderr);
-}
-
-/// Redirect stdout and stderr fo the IDE's console output.
-///
-/// Errors in this operation will be printed to the log file and the IDE's
-/// console output as well.
-///
-/// \return
-///     A fd pointing to the original stdout.
-int SetupStdoutStderrRedirection() {
-  int stdoutfd = fileno(stdout);
-  int new_stdout_fd = dup(stdoutfd);
-  auto output_callback_stderr = [](llvm::StringRef data) {
-    g_vsc.SendOutput(OutputType::Stderr, data);
-  };
-  auto output_callback_stdout = [](llvm::StringRef data) {
-    g_vsc.SendOutput(OutputType::Stdout, data);
-  };
-  if (llvm::Error err = RedirectFd(stdoutfd, output_callback_stdout)) {
-    std::string error_message = llvm::toString(std::move(err));
-    if (g_vsc.log)
-      *g_vsc.log << error_message << std::endl;
-    output_callback_stderr(error_message);
-  }
-  if (llvm::Error err = RedirectFd(fileno(stderr), output_callback_stderr)) {
-    std::string error_message = llvm::toString(std::move(err));
-    if (g_vsc.log)
-      *g_vsc.log << error_message << std::endl;
-    output_callback_stderr(error_message);
-  }
-
-  /// used only by TestVSCode_redirection_to_console.py
-  if (getenv("LLDB_VSCODE_TEST_STDOUT_STDERR_REDIRECTION") != nullptr)
-    redirection_test();
-  return new_stdout_fd;
-}
-
 int main(int argc, char *argv[]) {
   llvm::InitLLVM IL(argc, argv, /*InstallPipeSignalExitHandler=*/false);
   llvm::PrettyStackTraceProgram X(argc, argv);
@@ -3432,63 +3237,6 @@ int main(int argc, char *argv[]) {
   llvm::SmallString<256> program_path(argv[0]);
   llvm::sys::fs::make_absolute(program_path);
   g_vsc.debug_adaptor_path = program_path.str().str();
-
-  LLDBVSCodeOptTable T;
-  unsigned MAI, MAC;
-  llvm::ArrayRef<const char *> ArgsArr = llvm::ArrayRef(argv + 1, argc);
-  llvm::opt::InputArgList input_args = T.ParseArgs(ArgsArr, MAI, MAC);
-
-  if (input_args.hasArg(OPT_help)) {
-    printHelp(T, llvm::sys::path::filename(argv[0]));
-    return EXIT_SUCCESS;
-  }
-
-  if (input_args.hasArg(OPT_repl_mode)) {
-    llvm::opt::Arg *repl_mode = input_args.getLastArg(OPT_repl_mode);
-    llvm::StringRef repl_mode_value = repl_mode->getValue();
-    if (repl_mode_value == "auto") {
-      g_vsc.repl_mode = ReplMode::Auto;
-    } else if (repl_mode_value == "variable") {
-      g_vsc.repl_mode = ReplMode::Variable;
-    } else if (repl_mode_value == "command") {
-      g_vsc.repl_mode = ReplMode::Command;
-    } else {
-      llvm::errs()
-          << "'" << repl_mode_value
-          << "' is not a valid option, use 'variable', 'command' or 'auto'.\n";
-      return EXIT_FAILURE;
-    }
-  }
-
-  if (llvm::opt::Arg *target_arg = input_args.getLastArg(OPT_launch_target)) {
-    if (llvm::opt::Arg *comm_file = input_args.getLastArg(OPT_comm_file)) {
-      lldb::pid_t pid = LLDB_INVALID_PROCESS_ID;
-      llvm::opt::Arg *debugger_pid = input_args.getLastArg(OPT_debugger_pid);
-      if (debugger_pid) {
-        llvm::StringRef debugger_pid_value = debugger_pid->getValue();
-        if (debugger_pid_value.getAsInteger(10, pid)) {
-          llvm::errs() << "'" << debugger_pid_value << "' is not a valid "
-                          "PID\n";
-          return EXIT_FAILURE;
-        }
-      }
-      int target_args_pos = argc;
-      for (int i = 0; i < argc; i++)
-        if (strcmp(argv[i], "--launch-target") == 0) {
-          target_args_pos = i + 1;
-          break;
-        }
-      LaunchRunInTerminalTarget(*target_arg, comm_file->getValue(), pid,
-                                argv + target_args_pos);
-    } else {
-      llvm::errs() << "\"--launch-target\" requires \"--comm-file\" to be "
-                      "specified\n";
-      return EXIT_FAILURE;
-    }
-  }
-
-  // stdout/stderr redirection to the IDE's console
-  int new_stdout_fd = SetupStdoutStderrRedirection();
 
   // Initialize LLDB first before we do anything.
   lldb::SBDebugger::Initialize();
@@ -3499,37 +3247,8 @@ int main(int argc, char *argv[]) {
 
   RegisterRequestCallbacks();
 
-  int portno = -1;
-
-  if (auto *arg = input_args.getLastArg(OPT_port)) {
-    auto optarg = arg->getValue();
-    char *remainder;
-    portno = strtol(optarg, &remainder, 0);
-    if (remainder == optarg || *remainder != '\0') {
-      fprintf(stderr, "'%s' is not a valid port number.\n", optarg);
-      return EXIT_FAILURE;
-    }
-  }
-
-#if !defined(_WIN32)
-  if (input_args.hasArg(OPT_wait_for_debugger)) {
-    printf("Paused waiting for debugger to attach (pid = %i)...\n", getpid());
-    pause();
-  }
-#endif
-  if (portno != -1) {
-    printf("Listening on port %i...\n", portno);
-    SOCKET socket_fd = AcceptConnection(portno);
-    if (socket_fd >= 0) {
-      g_vsc.input.descriptor = StreamDescriptor::from_socket(socket_fd, true);
-      g_vsc.output.descriptor = StreamDescriptor::from_socket(socket_fd, false);
-    } else {
-      return EXIT_FAILURE;
-    }
-  } else {
-    g_vsc.input.descriptor = StreamDescriptor::from_file(fileno(stdin), false);
-    g_vsc.output.descriptor = StreamDescriptor::from_file(new_stdout_fd, false);
-  }
+  g_vsc.input.descriptor = StreamDescriptor::from_file(fileno(stdin), false);
+  g_vsc.output.descriptor = StreamDescriptor::from_file(fileno(stdout), false);
 
   bool CleanExit = true;
   if (auto Err = g_vsc.Loop()) {

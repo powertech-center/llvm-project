@@ -474,33 +474,6 @@ llvm::json::Value CreateVariable(lldb::SBValue v, int64_t variablesReference,
 
 llvm::json::Value CreateCompileUnit(lldb::SBCompileUnit unit);
 
-/// Create a runInTerminal reverse request object
-///
-/// \param[in] launch_request
-///     The original launch_request object whose fields are used to construct
-///     the reverse request object.
-///
-/// \param[in] debug_adaptor_path
-///     Path to the current debug adaptor. It will be used to delegate the
-///     launch of the target.
-///
-/// \param[in] comm_file
-///     The fifo file used to communicate the with the target launcher.
-///
-/// \param[in] debugger_pid
-///     The PID of the lldb-vscode instance that will attach to the target. The
-///     launcher uses it on Linux tell the kernel that it should allow the
-///     debugger process to attach.
-///
-/// \return
-///     A "runInTerminal" JSON object that follows the specification outlined by
-///     Microsoft.
-llvm::json::Object
-CreateRunInTerminalReverseRequest(const llvm::json::Object &launch_request,
-                                  llvm::StringRef debug_adaptor_path,
-                                  llvm::StringRef comm_file,
-                                  lldb::pid_t debugger_pid);
-
 /// Create a "Terminated" JSON object that contains statistics
 ///
 /// \return
