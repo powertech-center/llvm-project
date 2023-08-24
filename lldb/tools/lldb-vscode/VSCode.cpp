@@ -641,7 +641,8 @@ llvm::Error VSCode::Loop() {
 
 void VSCode::SendReverseRequest(llvm::StringRef command,
                                 llvm::json::Value arguments,
-                                ResponseCallback callback) {
+                                ResponseCallback callback,
+                                bool wait) {
   int64_t id;
   {
     std::lock_guard<std::mutex> locker(call_mutex);
@@ -655,6 +656,15 @@ void VSCode::SendReverseRequest(llvm::StringRef command,
       {"command", command},
       {"arguments", std::move(arguments)},
   });
+
+  if (wait) {
+    if (auto Err = HandleNextObject()) {
+      auto ErrText = "Transport Error: " + llvm::toString(std::move(Err)) + "\n";
+      SendOutput(OutputType::Stderr, ErrText);
+      if (log)
+        *log << ErrText;
+    }
+  }
 }
 
 void VSCode::RegisterRequestCallback(std::string request,

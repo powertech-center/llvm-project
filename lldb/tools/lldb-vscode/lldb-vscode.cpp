@@ -1609,77 +1609,6 @@ void request_initialize(const llvm::json::Object &request) {
   g_vsc.SendJSON(llvm::json::Value(std::move(response)));
 }
 
-/*llvm::Error request_runInTerminal(const llvm::json::Object &launch_request,
-                                  const uint64_t timeout_seconds) {
-  g_vsc.is_attach = true;
-  lldb::SBAttachInfo attach_info;
-
-  llvm::Expected<std::shared_ptr<FifoFile>> comm_file_or_err =
-      CreateRunInTerminalCommFile();
-  if (!comm_file_or_err)
-    return comm_file_or_err.takeError();
-  FifoFile &comm_file = *comm_file_or_err.get();
-
-  RunInTerminalDebugAdapterCommChannel comm_channel(comm_file.m_path);
-
-  lldb::pid_t debugger_pid = LLDB_INVALID_PROCESS_ID;
-#if !defined(_WIN32)
-  debugger_pid = getpid();
-#endif
-  llvm::json::Object reverse_request = CreateRunInTerminalReverseRequest(
-      launch_request, g_vsc.debug_adaptor_path, comm_file.m_path, debugger_pid);
-  g_vsc.SendReverseRequest("runInTerminal", std::move(reverse_request),
-                           [](llvm::Expected<llvm::json::Value> value) {
-                             if (!value) {
-                               llvm::Error err = value.takeError();
-                               llvm::errs()
-                                   << "runInTerminal request failed: "
-                                   << llvm::toString(std::move(err)) << "\n";
-                             }
-                           });
-
-  if (llvm::Expected<lldb::pid_t> pid = comm_channel.GetLauncherPid())
-    attach_info.SetProcessID(*pid);
-  else
-    return pid.takeError();
-
-  g_vsc.debugger.SetAsync(false);
-  lldb::SBError error;
-  g_vsc.target.Attach(attach_info, error);
-
-  if (error.Fail())
-    return llvm::createStringError(llvm::inconvertibleErrorCode(),
-                                   "Failed to attach to the target process. %s",
-                                   comm_channel.GetLauncherError().c_str());
-  // This will notify the runInTerminal launcher that we attached.
-  // We have to make this async, as the function won't return until the launcher
-  // resumes and reads the data.
-  std::future<lldb::SBError> did_attach_message_success =
-      comm_channel.NotifyDidAttach();
-
-  // We just attached to the runInTerminal launcher, which was waiting to be
-  // attached. We now resume it, so it can receive the didAttach notification
-  // and then perform the exec. Upon continuing, the debugger will stop the
-  // process right in the middle of the exec. To the user, what we are doing is
-  // transparent, as they will only be able to see the process since the exec,
-  // completely unaware of the preparatory work.
-  g_vsc.target.GetProcess().Continue();
-
-  // Now that the actual target is just starting (i.e. exec was just invoked),
-  // we return the debugger to its async state.
-  g_vsc.debugger.SetAsync(true);
-
-  // If sending the notification failed, the launcher should be dead by now and
-  // the async didAttach notification should have an error message, so we
-  // return it. Otherwise, everything was a success.
-  did_attach_message_success.wait();
-  error = did_attach_message_success.get();
-  if (error.Success())
-    return llvm::Error::success();
-  return llvm::createStringError(llvm::inconvertibleErrorCode(),
-                                 error.GetCString());
-}*/
-
 // Takes a LaunchRequest object and launches the process, also handling
 // runInTerminal if applicable. It doesn't do any of the additional
 // initialization and bookkeeping stuff that is needed for `request_launch`.
@@ -1721,72 +1650,35 @@ lldb::SBError LaunchProcess(const llvm::json::Object &request) {
   launch_info.SetDetachOnError(detachOnError);
   launch_info.SetLaunchFlags(flags | lldb::eLaunchFlagDebug |
                              lldb::eLaunchFlagStopAtEntry);
- // const uint64_t timeout_seconds = GetUnsigned(arguments, "timeout", 30);
 
-  /*if (GetBoolean(arguments, "runInTerminal", false)) {
-    if (llvm::Error err = request_runInTerminal(request, timeout_seconds))
-      error.SetErrorString(llvm::toString(std::move(err)).c_str());
-  } else if (launchCommands.empty()) {*/
+  // Prepare "runInTerminal" request and return the terminal process id
+  static lldb::pid_t shellProcessId;
+  shellProcessId = LLDB_INVALID_PROCESS_ID;
+  llvm::json::Object reverse_request;
+  reverse_request.try_emplace("kind", "integrated");
+  std::vector<std::string> reverse_request_args;
+  reverse_request.try_emplace("args", reverse_request_args);
+  if (!cwd.empty())
+    reverse_request.try_emplace("cwd", cwd);
+  g_vsc.SendReverseRequest("runInTerminal", std::move(reverse_request),
+    [](llvm::Expected<llvm::json::Value> value) {
+      if (!value) {
+        llvm::Error err = value.takeError();
+        llvm::errs()
+            << "runInTerminal request failed: "
+            << llvm::toString(std::move(err)) << "\n";
+      } else {
+        llvm::json::Object *obj = value->getAsObject();
+        shellProcessId = GetUnsigned(obj, "shellProcessId", LLDB_INVALID_PROCESS_ID);;
+      }
+    }, true/*wait*/);
 
-  //  g_vsc.SendOutput(OutputType::Stdout, "Перед захватом терминала\n");
+  /*!!!*/ g_vsc.SendOutput(OutputType::Stdout, "shellProcessId: " + std::to_string(shellProcessId) + "\n");
 
-    static lldb::pid_t shellProcessId = LLDB_INVALID_PROCESS_ID;
+  g_vsc.debugger.SetAsync(false);
+  g_vsc.target.Launch(launch_info, error);
+  g_vsc.debugger.SetAsync(true);
 
-
-    llvm::json::Object reverse_request = CreateRunInTerminalReverseRequest(
-      /*request, g_vsc.debug_adaptor_path, comm_file.m_path, debugger_pid*/);
-    g_vsc.SendReverseRequest("runInTerminal", std::move(reverse_request),
-      [](llvm::Expected<llvm::json::Value> value) {
-       // g_vsc.SendOutput(OutputType::Stdout, "Внутри захвата терминала\n");
-        if (!value) {
-          shellProcessId = LLDB_INVALID_PROCESS_ID;
-          llvm::Error err = value.takeError();
-          llvm::errs()
-              << "runInTerminal request failed: "
-              << llvm::toString(std::move(err)) << "\n";
-        } {
-          llvm::json::Object *obj = value->getAsObject();
-          shellProcessId = GetUnsigned(obj, "shellProcessId", LLDB_INVALID_PROCESS_ID);;
-      //    g_vsc.SendOutput(OutputType::Stdout, "Терминал создан: " + JSONToString(*value) + "\n");
-        }
-      });
-
-    if (auto Err = g_vsc.HandleNextObject()) {
-      auto ErrText = "Transport Error: " + llvm::toString(std::move(Err)) + "\n";
-      g_vsc.SendOutput(OutputType::Stderr, ErrText);
-      if (g_vsc.log)
-        *g_vsc.log << ErrText;
-    }
-
-    g_vsc.SendOutput(OutputType::Stdout, "shellProcessId: " + std::to_string(shellProcessId) + "\n");
-
-    //      g_vsc.SendOutput(OutputType::Stdout, "Перед лаунчем\n");
-          g_vsc.debugger.SetAsync(false);
-          g_vsc.target.Launch(launch_info, error);
-          g_vsc.debugger.SetAsync(true);
-      //    g_vsc.SendOutput(OutputType::Stdout, "После лаунча\n");
-
-
-   // g_vsc.SendOutput(OutputType::Stdout, "После захвата терминала\n");
-
-    // Disable async events so the launch will be successful when we return from
-    // the launch call and the launch will happen synchronously
-
-
-
-  /*} else {
-    // Set the launch info so that run commands can access the configured
-    // launch details.
-    g_vsc.target.SetLaunchInfo(launch_info);
-    g_vsc.RunLLDBCommands("Running launchCommands:", launchCommands);
-    // The custom commands might have created a new target so we should use the
-    // selected target after these commands are run.
-    g_vsc.target = g_vsc.debugger.GetSelectedTarget();
-    // Make sure the process is launched and stopped at the entry point before
-    // proceeding as the the launch commands are not run using the synchronous
-    // mode.
-    error = g_vsc.WaitForProcessToStop(timeout_seconds);
-  }*/
   return error;
 }
 

@@ -1112,51 +1112,6 @@ llvm::json::Value CreateCompileUnit(lldb::SBCompileUnit unit) {
   return llvm::json::Value(std::move(object));
 }
 
-/// See
-/// https://microsoft.github.io/debug-adapter-protocol/specification#Reverse_Requests_RunInTerminal
-llvm::json::Object
-CreateRunInTerminalReverseRequest(/*const llvm::json::Object &launch_request,
-                                  llvm::StringRef debug_adaptor_path,
-                                  llvm::StringRef comm_file,
-                                  lldb::pid_t debugger_pid*/) {
-  llvm::json::Object run_in_terminal_args;
-  // This indicates the IDE to open an embedded terminal, instead of opening the
-  // terminal in a new window.
-  run_in_terminal_args.try_emplace("kind", "integrated");
-
-  //auto launch_request_arguments = launch_request.getObject("arguments");
-  // The program path must be the first entry in the "args" field
-  std::vector<std::string> args;/* = {
-      debug_adaptor_path.str(), "--comm-file", comm_file.str()};
-  if (debugger_pid != LLDB_INVALID_PROCESS_ID) {
-    args.push_back("--debugger-pid");
-    args.push_back(std::to_string(debugger_pid));
-  }
-  args.push_back("--launch-target");
-  args.push_back(GetString(launch_request_arguments, "program").str());
-  std::vector<std::string> target_args =
-      GetStrings(launch_request_arguments, "args");
-  args.insert(args.end(), target_args.begin(), target_args.end());*/
-  run_in_terminal_args.try_emplace("args", args);
-
-  //const auto cwd = GetString(launch_request_arguments, "cwd");
-  //if (!cwd.empty())
-  //  run_in_terminal_args.try_emplace("cwd", cwd);
-
-  // We need to convert the input list of environments variables into a
-  // dictionary
- /* std::vector<std::string> envs = GetStrings(launch_request_arguments, "env");*/
-  //llvm::json::Object environment;
-  /*for (const std::string &env : envs) {
-    size_t index = env.find('=');
-    environment.try_emplace(env.substr(0, index), env.substr(index + 1));
-  }*/
- // run_in_terminal_args.try_emplace("env",
-  //                                 llvm::json::Value(std::move(environment)));
-
-  return run_in_terminal_args;
-}
-
 // Keep all the top level items from the statistics dump, except for the
 // "modules" array. It can be huge and cause delay
 // Array and dictionary value will return as <key, JSON string> pairs

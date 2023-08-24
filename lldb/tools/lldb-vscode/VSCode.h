@@ -270,8 +270,11 @@ struct VSCode {
   ///
   /// \param[in] callback
   ///   A callback to execute when the response arrives.
+  ///
+  /// \param[in] wait
+  ///   Wait the response to execute the callback.
   void SendReverseRequest(llvm::StringRef command, llvm::json::Value arguments,
-                          ResponseCallback callback);
+                          ResponseCallback callback, bool wait = false);
 
   /// Registers a callback handler for a Debug Adapter Protocol request
   ///
